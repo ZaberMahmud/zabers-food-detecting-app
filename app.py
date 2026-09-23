@@ -1,4 +1,3 @@
-
 import streamlit as st
 from ultralytics import YOLO
 from PIL import Image
@@ -6,10 +5,6 @@ import numpy as np
 import pandas as pd
 import os
 from datetime import datetime
-
-# --------------------------------------------------
-# PAGE CONFIG
-# --------------------------------------------------
 
 st.set_page_config(
     page_title="Zabers Food Detecting App",
@@ -19,10 +14,6 @@ st.set_page_config(
 
 st.title("🍽️ Zaber's Food Detecting App")
 st.write("Upload a food image or take a photo to identify the food.")
-
-# --------------------------------------------------
-# FOOD CLASSES
-# --------------------------------------------------
 
 FOOD_CLASSES = [
     "pizza",
@@ -47,10 +38,6 @@ FOOD_CLASSES = [
     "samosa"
 ]
 
-# --------------------------------------------------
-# LOAD MODEL
-# --------------------------------------------------
-
 MODEL_PATH = os.path.join(
     os.path.dirname(__file__),
     "models",
@@ -63,21 +50,12 @@ def load_model():
 
 model = load_model()
 
-# --------------------------------------------------
-# SESSION STATE
-# --------------------------------------------------
-
 if "history" not in st.session_state:
     st.session_state.history = []
 
-# --------------------------------------------------
-# PREDICTION FUNCTION
-# --------------------------------------------------
 
 def predict_food(image):
-
     image = image.convert("RGB")
-
     image_array = np.array(image)
 
     results = model.predict(
@@ -90,17 +68,11 @@ def predict_food(image):
     result = results[0]
 
     predicted_index = result.probs.top1
-
     predicted_food = result.names[predicted_index]
-
     confidence = float(result.probs.top1conf)
 
     return image, predicted_food, confidence
 
-
-# --------------------------------------------------
-# INPUT METHOD
-# --------------------------------------------------
 
 st.subheader("Choose Image Source")
 
@@ -112,10 +84,6 @@ input_method = st.radio(
 
 image = None
 
-# --------------------------------------------------
-# CAMERA INPUT
-# --------------------------------------------------
-
 if input_method == "📷 Take Photo":
 
     camera_image = st.camera_input(
@@ -124,11 +92,6 @@ if input_method == "📷 Take Photo":
 
     if camera_image is not None:
         image = Image.open(camera_image)
-
-
-# --------------------------------------------------
-# IMAGE UPLOAD
-# --------------------------------------------------
 
 else:
 
@@ -140,10 +103,6 @@ else:
     if uploaded_image is not None:
         image = Image.open(uploaded_image)
 
-
-# --------------------------------------------------
-# PREDICTION
-# --------------------------------------------------
 
 if image is not None:
 
@@ -160,10 +119,11 @@ if image is not None:
 
         with st.spinner("Analyzing food..."):
 
-            processed_image, predicted_food, confidence = predict_food(image)
+            _, predicted_food, confidence = predict_food(image)
 
-        # Format food name
-        display_name = predicted_food.replace("_", " ").title()
+        display_name = predicted_food.replace(
+            "_", " "
+        ).title()
 
         confidence_percent = confidence * 100
 
@@ -176,20 +136,14 @@ if image is not None:
             f"{confidence_percent:.2f}%"
         )
 
-        # --------------------------------------------------
-        # SAVE RESULT TO HISTORY
-        # --------------------------------------------------
-
         st.session_state.history.append({
-            "Time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "Time": datetime.now().strftime(
+                "%Y-%m-%d %H:%M:%S"
+            ),
             "Food": display_name,
             "Confidence": f"{confidence_percent:.2f}%"
         })
 
-
-# --------------------------------------------------
-# HISTORY / GALLERY
-# --------------------------------------------------
 
 if st.session_state.history:
 
@@ -207,8 +161,6 @@ if st.session_state.history:
         hide_index=True
     )
 
-    # Download report
-
     csv_data = history_df.to_csv(index=False)
 
     st.download_button(
@@ -219,10 +171,6 @@ if st.session_state.history:
         use_container_width=True
     )
 
-
-# --------------------------------------------------
-# SIDEBAR
-# --------------------------------------------------
 
 with st.sidebar:
 
@@ -243,12 +191,8 @@ with st.sidebar:
     st.divider()
 
     st.write("### Model")
-
     st.write("YOLO11s Classification")
 
     st.write("### Test Accuracy")
-
     st.write("88.6% Top-1")
-
     st.write("97.1% Top-5")
-```
