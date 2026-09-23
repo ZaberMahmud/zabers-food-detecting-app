@@ -1,45 +1,28 @@
-
+```python
 import streamlit as st
 from ultralytics import YOLO
-from datetime import datetime
 from PIL import Image
-from collections import Counter
+import numpy as np
 import pandas as pd
-import tempfile
 import os
+from datetime import datetime
 
-# ============================================
+# --------------------------------------------------
 # PAGE CONFIG
-# ============================================
+# --------------------------------------------------
 
 st.set_page_config(
     page_title="Zabers Food Detecting App",
-    page_icon="🍴",
+    page_icon="🍽️",
     layout="centered"
 )
 
-st.title("🍴 ZABERS FOOD DETECTING APP")
-st.info("🤖 AI Food Classification - Detect Food Using YOLO11")
+st.title("🍽️ Zaber's Food Detecting App")
+st.write("Upload a food image or take a photo to identify the food.")
 
-# ============================================
-# MODEL
-# ============================================
-
-MODEL_PATH = os.path.join(
-    os.path.dirname(__file__),
-    "models",
-    "food_classifier.pt"
-)
-
-@st.cache_resource
-def load_model():
-    return YOLO(MODEL_PATH)
-
-model = load_model()
-
-# ============================================
-# 20 FOOD CLASSES
-# ============================================
+# --------------------------------------------------
+# FOOD CLASSES
+# --------------------------------------------------
 
 FOOD_CLASSES = [
     "pizza",
@@ -64,254 +47,208 @@ FOOD_CLASSES = [
     "samosa"
 ]
 
-# ============================================
-# SESSION MEMORY
-# ============================================
+# --------------------------------------------------
+# LOAD MODEL
+# --------------------------------------------------
 
-if "detecting" not in st.session_state:
-    st.session_state.detecting = False
-
-if "captured_images" not in st.session_state:
-    st.session_state.captured_images = []
-
-if "predictions" not in st.session_state:
-    st.session_state.predictions = []
-
-# ============================================
-# START / STOP
-# ============================================
-
-st.divider()
-st.subheader("🍽️ FOOD DETECTION CONTROL")
-
-c1, c2 = st.columns(2)
-
-with c1:
-    if st.button(
-        "▶️ START DETECTION",
-        use_container_width=True
-    ):
-        st.session_state.detecting = True
-        st.rerun()
-
-with c2:
-    if st.button(
-        "⏹️ STOP DETECTION",
-        use_container_width=True
-    ):
-        st.session_state.detecting = False
-        st.rerun()
-
-# ============================================
-# CAMERA ON / OFF
-# ============================================
-
-st.subheader("📷 CAMERA ON/OFF")
-
-camera_on = st.toggle(
-    "Camera ON/OFF",
-    value=st.session_state.detecting
+MODEL_PATH = os.path.join(
+    os.path.dirname(__file__),
+    "models",
+    "food_classifier.pt"
 )
 
-# ============================================
-# CAMERA DETECTION
-# ============================================
+@st.cache_resource
+def load_model():
+    return YOLO(MODEL_PATH)
 
-if camera_on and st.session_state.detecting:
+model = load_model()
 
-    st.success("🟢 AI FOOD DETECTION RUNNING")
+# --------------------------------------------------
+# SESSION STATE
+# --------------------------------------------------
 
-    photo = st.camera_input(
-        "CAPTURE FOOD IMAGE",
-        label_visibility="collapsed"
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+# --------------------------------------------------
+# PREDICTION FUNCTION
+# --------------------------------------------------
+
+def predict_food(image):
+
+    image = image.convert("RGB")
+
+    image_array = np.array(image)
+
+    results = model.predict(
+        source=image_array,
+        imgsz=224,
+        device="cpu",
+        verbose=False
     )
 
-    if photo is not None:
+    result = results[0]
 
-        # Save uploaded camera image temporarily
-        image = Image.open(photo).convert("RGB")
+    predicted_index = result.probs.top1
 
-        # Run YOLO classification
-        results = model.predict(
-            source=image,
-            imgsz=224,
-            verbose=False
-        )
+    predicted_food = result.names[predicted_index]
 
-        result = results[0]
+    confidence = float(result.probs.top1conf)
 
-        # Top-1 prediction
-        predicted_index = result.probs.top1
-        predicted_food = result.names[predicted_index]
-        confidence = float(result.probs.top1conf)
+    return image, predicted_food, confidence
 
-        # Store detection
-        st.session_state.captured_images.append(image)
-        st.session_state.predictions.append({
-            "food": predicted_food,
-            "confidence": confidence,
-            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        })
 
-        # ====================================
-        # SHOW RESULT
-        # ====================================
+# --------------------------------------------------
+# INPUT METHOD
+# --------------------------------------------------
 
-        st.divider()
-        st.subheader("🤖 AI DETECTION RESULT")
+st.subheader("Choose Image Source")
 
-        st.image(
-            image,
-            caption="Captured Food",
-            use_container_width=True
-        )
+input_method = st.radio(
+    "Select an option:",
+    ["📷 Take Photo", "🖼️ Upload Image"],
+    horizontal=True
+)
+
+image = None
+
+# --------------------------------------------------
+# CAMERA INPUT
+# --------------------------------------------------
+
+if input_method == "📷 Take Photo":
+
+    camera_image = st.camera_input(
+        "Take a photo of your food"
+    )
+
+    if camera_image is not None:
+        image = Image.open(camera_image)
+
+
+# --------------------------------------------------
+# IMAGE UPLOAD
+# --------------------------------------------------
+
+else:
+
+    uploaded_image = st.file_uploader(
+        "Upload a food image",
+        type=["jpg", "jpeg", "png", "webp"]
+    )
+
+    if uploaded_image is not None:
+        image = Image.open(uploaded_image)
+
+
+# --------------------------------------------------
+# PREDICTION
+# --------------------------------------------------
+
+if image is not None:
+
+    st.image(
+        image,
+        caption="Selected Image",
+        use_container_width=True
+    )
+
+    if st.button(
+        "🔍 Detect Food",
+        use_container_width=True
+    ):
+
+        with st.spinner("Analyzing food..."):
+
+            processed_image, predicted_food, confidence = predict_food(image)
+
+        # Format food name
+        display_name = predicted_food.replace("_", " ").title()
+
+        confidence_percent = confidence * 100
 
         st.success(
-            f"🍴 Predicted Food: **{predicted_food.replace('_', ' ').title()}**"
+            f"🍽️ Prediction: **{display_name}**"
         )
 
         st.metric(
             "Confidence",
-            f"{confidence * 100:.2f}%"
+            f"{confidence_percent:.2f}%"
         )
 
-        st.success(
-            f"⚡ Detection #{len(st.session_state.predictions)} complete!"
-        )
+        # --------------------------------------------------
+        # SAVE RESULT TO HISTORY
+        # --------------------------------------------------
 
-# ============================================
-# DETECTION GALLERY
-# ============================================
-
-st.divider()
-
-st.subheader(
-    f"📸 DETECTION GALLERY - Total: "
-    f"{len(st.session_state.captured_images)}"
-)
-
-if st.session_state.captured_images:
-
-    cols = st.columns(3)
-
-    recent_count = min(
-        6,
-        len(st.session_state.captured_images)
-    )
-
-    for i in range(recent_count):
-
-        index = len(
-            st.session_state.captured_images
-        ) - recent_count + i
-
-        with cols[i % 3]:
-
-            st.image(
-                st.session_state.captured_images[index],
-                caption=(
-                    st.session_state.predictions[index]["food"]
-                    .replace("_", " ")
-                    .title()
-                ),
-                use_container_width=True
-            )
-
-# ============================================
-# FOOD COUNT REPORT
-# ============================================
-
-st.divider()
-
-st.subheader("📊 FOOD DETECTION REPORT")
-
-if st.session_state.predictions:
-
-    food_counts = Counter(
-        item["food"]
-        for item in st.session_state.predictions
-    )
-
-    report_data = []
-
-    for food, count in food_counts.items():
-        report_data.append({
-            "Food": food.replace("_", " ").title(),
-            "Count": count
+        st.session_state.history.append({
+            "Time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "Food": display_name,
+            "Confidence": f"{confidence_percent:.2f}%"
         })
 
-    report_df = pd.DataFrame(report_data)
 
-    st.table(report_df)
+# --------------------------------------------------
+# HISTORY / GALLERY
+# --------------------------------------------------
 
-    st.metric(
-        "Total Food Images Detected",
-        len(st.session_state.predictions)
+if st.session_state.history:
+
+    st.divider()
+
+    st.subheader("📋 Detection History")
+
+    history_df = pd.DataFrame(
+        st.session_state.history
     )
 
-else:
+    st.dataframe(
+        history_df,
+        use_container_width=True,
+        hide_index=True
+    )
 
-    st.info("No food has been detected yet.")
+    # Download report
 
-# ============================================
-# DOWNLOAD REPORT
-# ============================================
-
-if st.session_state.predictions:
-
-    report = "ZABERS FOOD DETECTION REPORT\n"
-    report += "=" * 50 + "\n"
-    report += f"Date: {datetime.now()}\n\n"
-
-    report += "DETECTIONS\n"
-    report += "-" * 50 + "\n"
-
-    for i, item in enumerate(
-        st.session_state.predictions,
-        start=1
-    ):
-
-        food_name = item["food"].replace(
-            "_", " "
-        ).title()
-
-        report += (
-            f"{i}. {food_name} | "
-            f"Confidence: "
-            f"{item['confidence'] * 100:.2f}% | "
-            f"{item['time']}\n"
-        )
-
-    report += "\n"
-    report += "FOOD SUMMARY\n"
-    report += "-" * 50 + "\n"
-
-    for food, count in food_counts.items():
-
-        food_name = food.replace(
-            "_", " "
-        ).title()
-
-        report += f"{food_name}: {count}\n"
-
-    report += "\n"
-    report += f"Total Images: {len(st.session_state.predictions)}\n"
+    csv_data = history_df.to_csv(index=False)
 
     st.download_button(
-        "📥 DOWNLOAD FOOD DETECTION REPORT",
-        report,
-        file_name="zabers_food_detection_report.txt",
+        label="⬇️ Download Detection Report",
+        data=csv_data,
+        file_name="zabers_food_detection_report.csv",
+        mime="text/csv",
         use_container_width=True
     )
 
-# ============================================
-# STANDBY MESSAGE
-# ============================================
 
-elif not camera_on:
+# --------------------------------------------------
+# SIDEBAR
+# --------------------------------------------------
 
-    st.warning("🔴 Camera OFF - Detection Standby")
+with st.sidebar:
 
-else:
+    st.header("🍽️ About")
 
-    st.info("Press START DETECTION to begin.")
+    st.write(
+        "Zaber's Food Detecting App uses a YOLO11s "
+        "classification model to recognize 20 different foods."
+    )
+
+    st.write("### Supported Foods")
+
+    for food in FOOD_CLASSES:
+        st.write(
+            f"• {food.replace('_', ' ').title()}"
+        )
+
+    st.divider()
+
+    st.write("### Model")
+
+    st.write("YOLO11s Classification")
+
+    st.write("### Test Accuracy")
+
+    st.write("88.6% Top-1")
+
+    st.write("97.1% Top-5")
+```
